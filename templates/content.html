@@ -1,0 +1,35 @@
+<html>
+    <head>
+        <link rel="stylesheet" href="/static/pico.min.css" />
+        <link rel="stylesheet" href="/static/style.css" />
+        <script type="text/javascript" src="/static/app.js" ></script>
+    </head>
+    <body>
+        <h1>Hello Sir!</h1>
+
+        <div>
+            <div class="label">
+                <label for="tts_text">Text to generate</label>
+            </div>
+            <div>
+                <textarea id="tts_text" type="text" lines="5" class="textarea">je aime les croissants</textarea> 
+            </div>
+                <button type="button" onclick="generateSpeech()">Generate</button>
+            </div>
+        </div>
+        
+
+        <div>
+            <div id="currentplay">
+                <div id="currentSentence"></div>
+                <div id="currentAudio"></div>
+                
+            </div>
+
+            <br/>
+            <ol id="generated_text">
+
+            </ol>
+        </div>
+    </body>
+</html>
