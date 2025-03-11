@@ -3,6 +3,7 @@
 from flask import Flask, jsonify, request, render_template
 from flask_cors import CORS, cross_origin
 from soundgenerator import SoundGenerator
+import os as os
 
 app = Flask(__name__)
 cors = CORS(app) # allow CORS for all domains on all routes.
@@ -15,6 +16,16 @@ def generate_tts():
     text = request.json['text']
     result = soundGenerator.generate_text(identifier, text)
     return jsonify(result)
+
+@app.route('/cleanup', methods=['POST'])
+def cleanup():
+    directory_path="static/sounds"
+    files = os.listdir(directory_path)
+    for file in files:
+        file_path = os.path.join(directory_path, file)
+        if os.path.isfile(file_path):
+            os.remove(file_path)
+    return jsonify({})
 
 @app.route('/sound', methods=['GET'])
 def get_file():

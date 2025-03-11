@@ -1,7 +1,7 @@
 
 const chatServerUrl = 'http://localhost:11434'
 const ttsServerUrl = 'http://localhost:5000'
-const llmmodel = 'mistral';
+const llmmodel = 'phi4';
 
 
 const ttsServer = {
@@ -15,6 +15,15 @@ const ttsServer = {
         });
         return response;
     },
+    cleanup: async () => {
+        const response = await fetch(`${ttsServerUrl}/cleanup`, {
+            method: 'POST',
+            body: JSON.stringify({}),
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+    },
     getSpeechUrl: (itm) => {
         return `${ttsServerUrl}/${itm.filename}`;
     }
@@ -22,61 +31,89 @@ const ttsServer = {
 
 
 const chatServer = {
-    explain: async (text) => {
-        const url = `${chatServerUrl}/v1/chat/completions`;
+    explain: async (text, callback, done) => {
+        const url = `${chatServerUrl}/api/generate`;
+        const body = {
+            model: llmmodel,
+            prompt: "Pretend that You are a master of the French language and know all grammar and sytax rules of it with intention to teach the user of all intricacies of the French language.First of all, translate the provided text, and then translate each word in the text in a separate line. One word per line. Your response is to an english speaking person, therefore it must be in English. Do not provide any text that is not a translation.\nTEXT:" + text,
+            stream: true
+        }
         const response = await fetch(url, {
             method: 'POST',
-            body: JSON.stringify({
-                model:llmmodel,
-                messages: [
-                    {
-                        role: "system",
-                        content: "You are an english language teacher that helpfully translates to a student the french language. The responses You provide are in english language. Each word is explained in a separate line."
-                    },
-                    {
-                        role: "user",
-                        content: `${text}`
-                    }
-                ],
-                temperature: 0.8,
-                max_tokens: -1,
-                stream: false
-            }),
+            body: JSON.stringify(body),
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
             }
         });
-        const result = await response.json();
-        console.log(result);
-        return result.choices[0].message.content;
-    },
-    ask: async (text) => {
-        const url = `${chatServerUrl}/v1/chat/completions`;
-        const response = await fetch(url, {
-            method: 'POST',
-            body: JSON.stringify({
-                'model': llmmodel,
-                messages: [
-                    {
-                        role: "system",
-                        content: "You are an english language teacher that helpfully explains to a student the french language. You try to be concise unless the user asks to explain it in detail. The responses You provide are in english language."
-                    },
-                    {
-                        role: "user",
-                        content: `${text}`
-                    }
-                ],
-                temperature: 0.8,
-                max_tokens: -1,
-                stream: false
-            }),
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
-        const result = await response.json();
-        return result.choices[0].message.content;
+        const reader = response.body.getReader();
 
+        while (true) {
+            const res = await reader.read();
+            if (res.done) {
+                break;
+            }
+            let val = new TextDecoder().decode(res.value, { stream: true });
+            let json = JSON.parse(val);
+            callback(json.response);
+        }
+        done();
+    },
+    correct: async (text, callback, done) => {
+        const url = `${chatServerUrl}/api/generate`;
+        const body = {
+            model: llmmodel,
+            prompt: "Pretend that You are a master of the French language and know all grammar and sytax rules of it with intention to teach the user of all intricacies of the French language. Identify the problems with the french text provided in the french text and, if there are any, and concisely explain them in English.\nTEXT:" + text,
+            stream: true
+        }
+        const response = await fetch(url, {
+            method: 'POST',
+            body: JSON.stringify(body),
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            }
+        });
+        const reader = response.body.getReader();
+
+        while (true) {
+            const res = await reader.read();
+            if (res.done) {
+                break;
+            }
+            let val = new TextDecoder().decode(res.value, { stream: true });
+            let json = JSON.parse(val);
+            callback(json.response);
+        }
+        done();
+    },
+    ask: async (text, callback, done) => {
+        const url = `${chatServerUrl}/api/generate`;
+        const body = {
+            model: llmmodel,
+            prompt: text,
+            stream: true
+        }
+        const response = await fetch(url, {
+            method: 'POST',
+            body: JSON.stringify(body),
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            }
+        });
+        const reader = response.body.getReader();
+
+        while (true) {
+            const res = await reader.read();
+            if (res.done) {
+                break;
+            }
+            let val = new TextDecoder().decode(res.value, { stream: true });
+            let json = JSON.parse(val);
+            callback(json.response);
+        }
+        done();
     }
 
 }
@@ -90,7 +127,7 @@ let audioList = {};
 let currentlyPlaying = null;
 
 const audioTogglePlay = (audio) => {
-    if (!audio) return;
+    if(!audio) return;
     if (audio.paused) {
         audio.play();
     } else {
@@ -112,11 +149,14 @@ const audioBackwards = (audio) => {
 }
 
 const audioNext = (audio, currentlyPlaying) => {
-    if (!audio) return;
+    if (!audio && !currentlyPlaying && audioList){
+        playSpeech(Object.keys(audioList)[0]);
+        return;
+    }
     let element = document.getElementById(currentlyPlaying).nextSibling;
     let stop = false;
     while (element && !stop) {
-        if (element.tagName === 'SPAN') {
+        if (element.tagName === 'SPAN' && element.getAttribute('id')) {
             playSpeech(element.getAttribute('id'));
             break;
         } else {
@@ -130,7 +170,7 @@ const audioPrevious = (audio, currentlyPlaying) => {
     let element = document.getElementById(currentlyPlaying).previousSibling;
     let stop = false;
     while (element && !stop) {
-        if (element.tagName === 'SPAN') {
+        if (element.tagName === 'SPAN' && element.getAttribute('id')) {
             playSpeech(element.getAttribute('id'));
             break;
         } else {
@@ -151,19 +191,49 @@ const toggleDialog = (id) => {
     dial.toggleAttribute('open')
 }
 
+const keydownsets = {
+    generate: (ev) => {
+        if (!ev.shiftKey) return;
+        switch (ev.key) {
+            case '!':
+                document.getElementById('generateBtn').click();
+                break;
+            case 'E':
+                document.getElementById('tts_text').focus();
+                break;
+        }
+    },
+    explain: (ev) => {
+        if (!ev.shiftKey) return;
+        switch (ev.key) {
+            case '!':
+                document.getElementById('translateBtn').click();
+                break;
+            case '@':
+                document.getElementById('promptBtn').click();
+                break;
+            case '#':
+                document.getElementById('correctBtn').click();
+                break;
+            case 'E':
+                document.getElementById('tutorSource').focus();
+                break;
+        }
+    }
+}
+
+
+let keyDownSet = keydownsets.generate;
 
 window.onkeydown = (ev) => {
     const actElement = window.document.activeElement;
-    const skipElements = ['INPUT','TEXTAREA'];
-    if(skipElements.find(x=>x==actElement.tagName)){
+    const skipElements = ['INPUT', 'TEXTAREA'];
+    if (skipElements.find(x => x == actElement.tagName)) {
         return;
     }
     if (!ev.shiftKey) return;
 
     switch (ev.key) {
-        case 'G':
-            toggleDialog('generationDialog');
-            break;
         case ' ':
             audioTogglePlay(audio);
             break;
@@ -182,9 +252,34 @@ window.onkeydown = (ev) => {
         case 'D':
             audioNext(audio, currentlyPlaying);
             break;
+        case 'G':
+            toggleDialog('generationDialog');
+            document.getElementById('generateBtn').focus();
+            keyDownSet = keydownsets.generate;
+            break;
+        case 'X':
+            ttsServer.cleanup();
+            break;
         case 'T':
-            if (currentlyPlaying) {
-                explain(audioList[currentlyPlaying]?.text);
+            const selection = document.getSelection().toString();
+            if (selection !== '') {
+                text = selection;
+            } else {
+                text = audioList[currentlyPlaying]?.text;
+            }
+            if (text && document.getElementById('tutorDialog').getAttribute('open') !== '') {
+                explain(text);
+            }
+            else {
+                toggleDialog('tutorDialog');
+                document.getElementById('tutorLoading').style.display = 'none';
+                document.getElementById('promptBtn').focus();
+            }
+            keyDownSet = keydownsets.explain;
+            break;
+        default:
+            if (keyDownSet) {
+                keyDownSet(ev);
             }
             break;
     }
@@ -198,7 +293,7 @@ async function generateSpeech() {
     audioList = {};
     audio = null;
 
-    const text = document.getElementById('tts_text').value;
+    const text = document.getElementById('tts_text').value + '\n';
     document.getElementById('generationDialog').removeAttribute('open');
     document.getElementById('loadingSpace').style.display = 'block';
     const textToGenerate = [];
@@ -215,13 +310,13 @@ async function generateSpeech() {
                 if (nidx === -1) continue;
                 const diff = nidx - newIdx;
                 if (diff < 100) {
-                    newIdx = nidx + 1;
+                    newIdx = nidx;
                     break;
                 }
             }
         }
         textToGenerate.push(text.substring(idx, newIdx + 1));
-        idx = newIdx;
+        idx = newIdx + 1;
     }
 
     let first = true;
@@ -241,12 +336,21 @@ async function generateSpeech() {
             audioList[itm.identifier] = { text: itm.text, identifier: itm.identifier, filename: itm.filename }
             const textElement = document.createElement('span');
             textElement.setAttribute('id', itm.identifier);
-            textElement.onclick = () => playSpeech(itm.identifier);
+            textElement.ondblclick = () => {
+                const selection = document.getSelection();
+                if (selection?.removeAllRanges) {
+                    selection.removeAllRanges();
+                }
+                playSpeech(itm.identifier);
+            }
             textElement.innerText = itm.text + ' ';
             generationDiv.appendChild(textElement);
             if (itm.identifier[0] === 'p') {
                 generationDiv.appendChild(document.createElement('br'));
-                generationDiv.appendChild(document.createElement('br'));
+                const space = document.createElement('span');
+                space.innerHTML = '&nbsp;&nbsp;&nbsp;&nbsp;'
+                generationDiv.appendChild(space);
+
             }
             if (first) {
                 // playSpeech(itm.identifier);
@@ -283,15 +387,19 @@ async function explain(text) {
     document.getElementById('tutorLoading').style.display = 'block';
     document.getElementById('tutorDialog').setAttribute('open', '');
     document.getElementById('tutorSource').value = text;
-    const result = await chatServer.explain(text);
-    console.log(`result is: ${result}`)
-    document.getElementById('tutorText').innerText = result;
-    document.getElementById('tutorLoading').style.display = 'none';
+    const textEl = document.getElementById('tutorText')
+    textEl.innerText = '';
+    await chatServer.explain(text, (t) => { textEl.innerText += t }, () => document.getElementById('tutorLoading').style.display = 'none');
 }
 async function ask(text) {
     document.getElementById('tutorLoading').style.display = 'block';
-    const result = await chatServer.ask(text);
-    document.getElementById('tutorText').value = result;
-    document.getElementById('tutorLoading').style.display = 'none';
-
+    const textEl = document.getElementById('tutorText')
+    textEl.innerText = '';
+    await chatServer.ask(text, (t) => { textEl.innerText += t }, () => document.getElementById('tutorLoading').style.display = 'none');
+}
+async function correct(text) {
+    document.getElementById('tutorLoading').style.display = 'block';
+    const textEl = document.getElementById('tutorText')
+    textEl.innerText = '';
+    await chatServer.correct(text, (t) => { textEl.innerText += t }, () => document.getElementById('tutorLoading').style.display = 'none');
 }

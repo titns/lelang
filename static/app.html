@@ -14,9 +14,9 @@
                 <p><strong>Enter the text to generate</strong></p>
             </header>
             <div>
-                <textarea id="tts_text" type="text" lines="5" class="textarea">je aime les croissants</textarea>
+                <textarea id="tts_text" tabindex="1" type="text" lines="5" class="textarea">je aime les croissants</textarea>
             </div>
-            <button type="button" onclick="generateSpeech()">Generate</button>
+            <button tabindex="0" type="button" id="generateBtn" onclick="generateSpeech()">Generate</button>
             </div>
         </article>
     </dialog>
@@ -29,11 +29,13 @@
                 <p><strong id="tutorHeader">Explanation</strong></p>
             </header>
             <div>
-                <textarea id="tutorSource" type="text" lines="5" class="textarea"></textarea>
+                <textarea id="tutorSource" tabindex="2" type="text" lines="5" ></textarea>
                 <br />
-                <button type="button" onclick="ask(document.getElementById('tutorSource').value)">Prompt</button>
+                <button type="button" tabindex="3" id="translateBtn" onclick="explain(document.getElementById('tutorSource').value)">1. Translate</button>
+                <button type="button" tabindex="1" id="promptBtn" onclick="ask(document.getElementById('tutorSource').value)">2. Prompt</button>
+                <button type="button" tabindex="4" id="correctBtn" onclick="correct(document.getElementById('tutorSource').value)">3. Is this correct?</button>
             </div>
-            <div style="white-space: pre-line" id="tutorText">
+            <div style="white-space: pre-line; font-size:medium; height:800px;" id="tutorText">
             </div>
             </div>
         </article>
@@ -51,7 +53,7 @@
         </div>
 
         <br />
-        <div id="generatedText">
+        <div id="generatedText" style="height:800px">
 
         </div>
     </div>

@@ -16,7 +16,7 @@ bash ~/miniconda3/miniconda.sh -b -u -p ~/miniconda3
 rm ~/miniconda3/miniconda.sh
 
 # Create a python 3.12 virtual environment, you can also use virtualenv
-source ~/miniconda/bin/activate
+source ~/miniconda3/bin/activate
 conda create -n lelang python=3.12
 conda activate lelang
 
